@@ -11,8 +11,6 @@ export interface User {
   role: "client" | "merchant";
   google_id: string | null;
   is_verified: boolean;
-  verification_code: string | null;
-  verification_expires: string | null;
   reset_code: string | null;
   reset_expires: string | null;
   refresh_token: string | null;
@@ -50,14 +48,11 @@ export async function createUser(data: {
   birth_date: string | null;
   role: "client" | "merchant";
   google_id?: string | null;
-  is_verified?: boolean;
-  verification_code?: string | null;
-  verification_expires?: Date | null;
   lang?: string;
 }): Promise<User> {
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, first_name, last_name, username, birth_date, role, google_id, is_verified, verification_code, verification_expires, lang)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `INSERT INTO users (email, password_hash, first_name, last_name, username, birth_date, role, google_id, is_verified, lang)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
      RETURNING *`,
     [
       data.email,
@@ -68,9 +63,6 @@ export async function createUser(data: {
       data.birth_date,
       data.role,
       data.google_id || null,
-      data.is_verified || false,
-      data.verification_code || null,
-      data.verification_expires || null,
       data.lang || "en",
     ]
   );
@@ -87,10 +79,4 @@ export async function updateUser(id: string, fields: Partial<User>): Promise<Use
     [id, ...values]
   );
   return rows[0];
-}
-
-export async function deleteUnverifiedExpired(): Promise<void> {
-  await pool.query(
-    "DELETE FROM users WHERE is_verified = false AND verification_expires < NOW() - INTERVAL '1 hour'"
-  );
 }

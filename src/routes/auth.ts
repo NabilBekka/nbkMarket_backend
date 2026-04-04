@@ -8,12 +8,15 @@ import {
   verifyEmailSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  resendCodeSchema,
 } from "../utils/validation";
 
 const router = Router();
 
 router.post("/register", validate(registerSchema), AuthController.register);
 router.post("/verify-email", validate(verifyEmailSchema), AuthController.verifyEmail);
+router.post("/resend-code", validate(resendCodeSchema), AuthController.resendCode);
+router.get("/check-username/:username", AuthController.checkUsername);
 router.post("/login", validate(loginSchema), AuthController.login);
 router.post("/forgot-password", validate(forgotPasswordSchema), AuthController.forgotPassword);
 router.post("/reset-password", validate(resetPasswordSchema), AuthController.resetPassword);

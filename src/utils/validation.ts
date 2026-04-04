@@ -24,6 +24,10 @@ export const verifyEmailSchema = z.object({
   code: z.string().length(6),
 });
 
+export const resendCodeSchema = z.object({
+  email: z.string().email(),
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),
   lang: z.enum(["en", "fr"]).optional(),
@@ -33,9 +37,4 @@ export const resetPasswordSchema = z.object({
   email: z.string().email(),
   code: z.string().length(6),
   password: z.string().regex(passwordRegex, "Password does not meet requirements"),
-});
-
-export const googleAuthSchema = z.object({
-  token: z.string().min(1),
-  lang: z.enum(["en", "fr"]).optional(),
 });

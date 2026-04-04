@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import * as UserModel from "../models/user";
+import * as PendingModel from "../models/pending";
 import * as JWT from "../services/jwt";
 import * as Email from "../services/email";
 import { AuthRequest } from "../middlewares/auth";
@@ -21,7 +22,6 @@ function sanitizeUser(user: UserModel.User) {
     username: user.username,
     birth_date: user.birth_date,
     role: user.role,
-    is_verified: user.is_verified,
     lang: user.lang,
     created_at: user.created_at,
   };
@@ -32,66 +32,52 @@ export async function register(req: Request, res: Response) {
   try {
     const { email, password, first_name, last_name, username, birth_date, lang } = req.body;
 
-    const existingEmail = await UserModel.findByEmail(email);
-    if (existingEmail && existingEmail.is_verified) {
+    // Check email in existing users
+    const existingUser = await UserModel.findByEmail(email);
+    if (existingUser) {
       return res.status(409).json({ error: "Email already in use" });
     }
 
-    if (existingEmail && !existingEmail.is_verified) {
-      await UserModel.updateUser(existingEmail.id, {
-        password_hash: await bcrypt.hash(password, SALT_ROUNDS),
-        first_name,
-        last_name,
-        username,
-        birth_date,
-        verification_code: Email.generateCode(),
-        verification_expires: codeExpiresAt().toISOString(),
-        lang: lang || "en",
-      } as Partial<UserModel.User>);
-
-      const updated = await UserModel.findByEmail(email);
-      await Email.sendVerificationEmail(email, updated!.verification_code!, lang || "en");
-
-      return res.status(200).json({
-        message: "Verification code resent",
-        email,
-      });
+    // Check username in existing users
+    const existingUsername = await UserModel.findByUsername(username);
+    if (existingUsername) {
+      return res.status(409).json({ error: "Username already taken" });
     }
 
-    if (username) {
-      const existingUsername = await UserModel.findByUsername(username);
-      if (existingUsername) {
-        return res.status(409).json({ error: "Username already taken" });
-      }
+    // Check username in pending registrations
+    const pendingUsername = await PendingModel.findByUsername(username);
+    if (pendingUsername && pendingUsername.email !== email) {
+      return res.status(409).json({ error: "Username already taken" });
     }
 
+    // Delete any existing pending for this email
+    await PendingModel.deleteByEmail(email);
+
+    // Hash password and create pending registration
     const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
     const code = Email.generateCode();
 
-    const user = await UserModel.createUser({
+    await PendingModel.create({
       email,
       password_hash,
       first_name,
       last_name,
       username,
       birth_date: birth_date || null,
-      role: "client",
+      lang: lang || "en",
       verification_code: code,
       verification_expires: codeExpiresAt(),
-      lang: lang || "en",
     });
 
+    // Send verification email
     await Email.sendVerificationEmail(email, code, lang || "en");
 
-    return res.status(201).json({
-      message: "Account created. Check your email for the verification code.",
-      email: user.email,
+    return res.status(200).json({
+      message: "Verification code sent to your email.",
+      email,
     });
   } catch (err: unknown) {
     console.error("[AUTH] Register error:", err);
-    if (err && typeof err === "object" && "code" in err && (err as Record<string, unknown>).code === "23505") {
-      return res.status(409).json({ error: "Email or username already in use" });
-    }
     return res.status(500).json({ error: "Internal server error" });
   }
 }
@@ -101,32 +87,38 @@ export async function verifyEmail(req: Request, res: Response) {
   try {
     const { email, code } = req.body;
 
-    const user = await UserModel.findByEmail(email);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (user.is_verified) {
-      return res.status(400).json({ error: "Email already verified" });
+    const pending = await PendingModel.findByEmail(email);
+    if (!pending) {
+      return res.status(404).json({ error: "No pending registration found" });
     }
 
     if (
-      user.verification_code !== code ||
-      !user.verification_expires ||
-      new Date(user.verification_expires) < new Date()
+      pending.verification_code !== code ||
+      new Date(pending.verification_expires) < new Date()
     ) {
       return res.status(400).json({ error: "Invalid or expired code" });
     }
 
+    // Create the actual user account
+    const user = await UserModel.createUser({
+      email: pending.email,
+      password_hash: pending.password_hash,
+      first_name: pending.first_name,
+      last_name: pending.last_name,
+      username: pending.username,
+      birth_date: pending.birth_date,
+      role: "client",
+      lang: pending.lang,
+    });
+
+    // Delete pending registration
+    await PendingModel.deleteByEmail(email);
+
+    // Generate tokens
     const accessToken = JWT.generateAccessToken({ userId: user.id, role: user.role });
     const refreshToken = JWT.generateRefreshToken({ userId: user.id, role: user.role });
 
-    await UserModel.updateUser(user.id, {
-      is_verified: true,
-      verification_code: null,
-      verification_expires: null,
-      refresh_token: refreshToken,
-    } as Partial<UserModel.User>);
+    await UserModel.updateUser(user.id, { refresh_token: refreshToken } as Partial<UserModel.User>);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -136,13 +128,65 @@ export async function verifyEmail(req: Request, res: Response) {
       path: "/",
     });
 
-    return res.status(200).json({
-      message: "Email verified",
+    return res.status(201).json({
+      message: "Account created and verified",
       accessToken,
-      user: sanitizeUser({ ...user, is_verified: true }),
+      user: sanitizeUser(user),
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[AUTH] Verify error:", err);
+    if (err && typeof err === "object" && "code" in err && (err as Record<string, unknown>).code === "23505") {
+      return res.status(409).json({ error: "Email or username already in use" });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// POST /api/auth/resend-code
+export async function resendCode(req: Request, res: Response) {
+  try {
+    const { email } = req.body;
+
+    const pending = await PendingModel.findByEmail(email);
+    if (!pending) {
+      return res.status(404).json({ error: "No pending registration found" });
+    }
+
+    const code = Email.generateCode();
+    await PendingModel.deleteByEmail(email);
+    await PendingModel.create({
+      ...pending,
+      verification_code: code,
+      verification_expires: codeExpiresAt(),
+    });
+
+    await Email.sendVerificationEmail(email, code, pending.lang);
+
+    return res.status(200).json({ message: "New verification code sent." });
+  } catch (err) {
+    console.error("[AUTH] Resend error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// GET /api/auth/check-username/:username
+export async function checkUsername(req: Request, res: Response) {
+  try {
+    const { username } = req.params;
+
+    const existingUser = await UserModel.findByUsername(username);
+    if (existingUser) {
+      return res.status(200).json({ available: false });
+    }
+
+    const pendingUser = await PendingModel.findByUsername(username);
+    if (pendingUser) {
+      return res.status(200).json({ available: false });
+    }
+
+    return res.status(200).json({ available: true });
+  } catch (err) {
+    console.error("[AUTH] Check username error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
@@ -155,22 +199,6 @@ export async function login(req: Request, res: Response) {
     const user = await UserModel.findByEmail(email);
     if (!user || !user.password_hash) {
       return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    if (!user.is_verified) {
-      const code = Email.generateCode();
-      await UserModel.updateUser(user.id, {
-        verification_code: code,
-        verification_expires: codeExpiresAt().toISOString(),
-      } as Partial<UserModel.User>);
-      await Email.sendVerificationEmail(email, code, user.lang);
-
-      return res.status(403).json({
-        error: "Email not verified",
-        message: "A new verification code has been sent to your email.",
-        email,
-        needsVerification: true,
-      });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
@@ -208,6 +236,7 @@ export async function forgotPassword(req: Request, res: Response) {
 
     const user = await UserModel.findByEmail(email);
     if (!user) {
+      // Don't reveal if email exists
       return res.status(200).json({ message: "If this email exists, a reset code has been sent." });
     }
 
@@ -299,7 +328,6 @@ export async function logout(req: AuthRequest, res: Response) {
     if (req.userId) {
       await UserModel.updateUser(req.userId, { refresh_token: null } as Partial<UserModel.User>);
     }
-
     res.clearCookie("refreshToken", { path: "/" });
     return res.status(200).json({ message: "Logged out" });
   } catch (err) {
@@ -314,12 +342,10 @@ export async function getMe(req: AuthRequest, res: Response) {
     if (!req.userId) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-
     const user = await UserModel.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (err) {
     console.error("[AUTH] GetMe error:", err);
