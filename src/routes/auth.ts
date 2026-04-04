@@ -18,6 +18,8 @@ router.post("/verify-email", validate(verifyEmailSchema), AuthController.verifyE
 router.post("/resend-code", validate(resendCodeSchema), AuthController.resendCode);
 router.get("/check-username/:username", AuthController.checkUsername);
 router.post("/login", validate(loginSchema), AuthController.login);
+router.post("/google", AuthController.googleAuth);
+router.post("/google/register", AuthController.googleRegister);
 router.post("/forgot-password", validate(forgotPasswordSchema), AuthController.forgotPassword);
 router.post("/reset-password", validate(resetPasswordSchema), AuthController.resetPassword);
 router.post("/refresh-token", AuthController.refreshToken);

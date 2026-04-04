@@ -22,4 +22,5 @@ export const config = {
     "http://localhost:3001",
   ],
   clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
 };

@@ -1,13 +1,16 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
 import * as UserModel from "../models/user";
 import * as PendingModel from "../models/pending";
 import * as JWT from "../services/jwt";
 import * as Email from "../services/email";
 import { AuthRequest } from "../middlewares/auth";
+import { config } from "../config/env";
 
 const SALT_ROUNDS = 12;
 const CODE_EXPIRY_MINUTES = 10;
+const googleClient = new OAuth2Client(config.googleClientId);
 
 function codeExpiresAt(): Date {
   return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
@@ -349,6 +352,164 @@ export async function getMe(req: AuthRequest, res: Response) {
     return res.status(200).json({ user: sanitizeUser(user) });
   } catch (err) {
     console.error("[AUTH] GetMe error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// POST /api/auth/google
+export async function googleAuth(req: Request, res: Response) {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ error: "Google credential required" });
+    }
+
+    let googleId: string, email: string, given_name: string, family_name: string;
+
+    // Try verifying as ID token first, then as access token
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: config.googleClientId,
+      });
+      const payload = ticket.getPayload()!;
+      googleId = payload.sub;
+      email = payload.email!;
+      given_name = payload.given_name || "";
+      family_name = payload.family_name || "";
+    } catch {
+      try {
+        const response = await fetch(
+          `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${credential}`
+        );
+        if (!response.ok) throw new Error("Invalid token");
+        const userInfo = await response.json();
+        googleId = userInfo.sub;
+        email = userInfo.email;
+        given_name = userInfo.given_name || "";
+        family_name = userInfo.family_name || "";
+      } catch {
+        return res.status(401).json({ error: "Invalid Google token" });
+      }
+    }
+
+    // Check if user already exists
+    const existingUser =
+      (await UserModel.findByGoogleId(googleId)) ||
+      (await UserModel.findByEmail(email));
+
+    if (existingUser) {
+      // Link Google account if not already linked
+      if (!existingUser.google_id) {
+        await UserModel.updateUser(existingUser.id, {
+          google_id: googleId,
+        } as Partial<UserModel.User>);
+      }
+
+      const accessToken = JWT.generateAccessToken({
+        userId: existingUser.id,
+        role: existingUser.role,
+      });
+      const refreshToken = JWT.generateRefreshToken({
+        userId: existingUser.id,
+        role: existingUser.role,
+      });
+
+      await UserModel.updateUser(existingUser.id, {
+        refresh_token: refreshToken,
+      } as Partial<UserModel.User>);
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      return res.status(200).json({
+        accessToken,
+        user: sanitizeUser(existingUser),
+        isExistingUser: true,
+      });
+    }
+
+    // User doesn't exist — send Google data back for registration completion
+    return res.status(200).json({
+      message: "Please complete registration",
+      googleData: {
+        googleId,
+        email,
+        firstName: given_name,
+        lastName: family_name,
+      },
+      isExistingUser: false,
+    });
+  } catch (err) {
+    console.error("[AUTH] Google auth error:", err);
+    return res.status(401).json({ error: "Invalid Google token" });
+  }
+}
+
+// POST /api/auth/google/register
+export async function googleRegister(req: Request, res: Response) {
+  try {
+    const { googleId, email, firstName, lastName, username, password, birthDate } = req.body;
+
+    if (!googleId || !email) {
+      return res.status(400).json({ error: "Missing Google data" });
+    }
+
+    // Check email
+    const existingEmail = await UserModel.findByEmail(email);
+    if (existingEmail) {
+      return res.status(409).json({ error: "Email already in use" });
+    }
+
+    // Check username
+    const existingUsername = await UserModel.findByUsername(username);
+    if (existingUsername) {
+      return res.status(409).json({ error: "Username already taken" });
+    }
+
+    const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const user = await UserModel.createUser({
+      email,
+      password_hash,
+      first_name: firstName,
+      last_name: lastName,
+      username,
+      birth_date: birthDate || null,
+      role: "client",
+      google_id: googleId,
+      lang: "en",
+    });
+
+    const accessToken = JWT.generateAccessToken({ userId: user.id, role: user.role });
+    const refreshToken = JWT.generateRefreshToken({ userId: user.id, role: user.role });
+
+    await UserModel.updateUser(user.id, {
+      refresh_token: refreshToken,
+    } as Partial<UserModel.User>);
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    return res.status(201).json({
+      accessToken,
+      user: sanitizeUser(user),
+    });
+  } catch (err: unknown) {
+    console.error("[AUTH] Google register error:", err);
+    if (err && typeof err === "object" && "code" in err && (err as Record<string, unknown>).code === "23505") {
+      return res.status(409).json({ error: "Email or username already in use" });
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 }
