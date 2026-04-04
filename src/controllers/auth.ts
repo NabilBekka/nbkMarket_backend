@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import * as UserModel from "../models/user";
 import * as PendingModel from "../models/pending";
 import * as JWT from "../services/jwt";

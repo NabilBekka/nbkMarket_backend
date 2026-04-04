@@ -11,8 +11,12 @@ export const config = {
     accessExpiry: "15m",
     refreshExpiry: "7d",
   },
-  resendApiKey: process.env.RESEND_API_KEY || "",
-  emailFrom: process.env.EMAIL_FROM || "NBK Market <noreply@nbkmarket.dz>",
+  smtp: {
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT) || 587,
+    user: process.env.SMTP_USER || "",
+    pass: process.env.SMTP_PASS || "",
+  },
   corsOrigins: process.env.CORS_ORIGINS?.split(",") || [
     "http://localhost:3000",
     "http://localhost:3001",
