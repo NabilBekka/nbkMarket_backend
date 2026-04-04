@@ -25,5 +25,8 @@ router.post("/reset-password", validate(resetPasswordSchema), AuthController.res
 router.post("/refresh-token", AuthController.refreshToken);
 router.post("/logout", authMiddleware, AuthController.logout);
 router.get("/me", authMiddleware, AuthController.getMe);
+router.put("/profile", authMiddleware, AuthController.updateProfile);
+router.delete("/account", authMiddleware, AuthController.deleteAccount);
+router.put("/lang", authMiddleware, AuthController.updateLang);
 
 export default router;

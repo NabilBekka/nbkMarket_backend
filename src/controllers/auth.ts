@@ -117,6 +117,9 @@ export async function verifyEmail(req: Request, res: Response) {
     // Delete pending registration
     await PendingModel.deleteByEmail(email);
 
+    // Send welcome email
+    await Email.sendWelcomeEmail(user.email, user.first_name, user.lang);
+
     // Generate tokens
     const accessToken = JWT.generateAccessToken({ userId: user.id, role: user.role });
     const refreshToken = JWT.generateRefreshToken({ userId: user.id, role: user.role });
@@ -501,6 +504,9 @@ export async function googleRegister(req: Request, res: Response) {
       path: "/",
     });
 
+    // Send welcome email
+    await Email.sendWelcomeEmail(user.email, user.first_name, user.lang);
+
     return res.status(201).json({
       accessToken,
       user: sanitizeUser(user),
@@ -510,6 +516,128 @@ export async function googleRegister(req: Request, res: Response) {
     if (err && typeof err === "object" && "code" in err && (err as Record<string, unknown>).code === "23505") {
       return res.status(409).json({ error: "Email or username already in use" });
     }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// PUT /api/auth/profile
+export async function updateProfile(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const { password, updates } = req.body;
+    // updates = { first_name?, last_name?, username?, email?, birth_date?, new_password? }
+
+    const user = await UserModel.findById(req.userId);
+    if (!user || !user.password_hash) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify current password
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Incorrect password" });
+    }
+
+    const fieldsToUpdate: Partial<UserModel.User> = {};
+
+    if (updates.first_name && updates.first_name !== user.first_name) {
+      fieldsToUpdate.first_name = updates.first_name;
+    }
+    if (updates.last_name && updates.last_name !== user.last_name) {
+      fieldsToUpdate.last_name = updates.last_name;
+    }
+    if (updates.birth_date && updates.birth_date !== user.birth_date) {
+      fieldsToUpdate.birth_date = updates.birth_date;
+    }
+    if (updates.email && updates.email !== user.email) {
+      const existing = await UserModel.findByEmail(updates.email);
+      if (existing) {
+        return res.status(409).json({ error: "Email already in use" });
+      }
+      fieldsToUpdate.email = updates.email;
+    }
+    if (updates.username && updates.username !== user.username) {
+      const existing = await UserModel.findByUsername(updates.username);
+      if (existing) {
+        return res.status(409).json({ error: "Username already taken" });
+      }
+      fieldsToUpdate.username = updates.username;
+    }
+    if (updates.new_password) {
+      fieldsToUpdate.password_hash = await bcrypt.hash(updates.new_password, SALT_ROUNDS);
+    }
+
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      return res.status(200).json({ message: "No changes", user: sanitizeUser(user) });
+    }
+
+    const updated = await UserModel.updateUser(user.id, fieldsToUpdate);
+    return res.status(200).json({ message: "Profile updated", user: sanitizeUser(updated) });
+  } catch (err: unknown) {
+    console.error("[AUTH] Update profile error:", err);
+    if (err && typeof err === "object" && "code" in err && (err as Record<string, unknown>).code === "23505") {
+      return res.status(409).json({ error: "Email or username already in use" });
+    }
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// DELETE /api/auth/account
+export async function deleteAccount(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const { password } = req.body;
+
+    const user = await UserModel.findById(req.userId);
+    if (!user || !user.password_hash) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Incorrect password" });
+    }
+
+    // Save info before deletion for the email
+    const email = user.email;
+    const firstName = user.first_name;
+    const lang = user.lang;
+
+    await UserModel.deleteUser(user.id);
+    res.clearCookie("refreshToken", { path: "/" });
+
+    // Send deletion confirmation email
+    await Email.sendAccountDeletedEmail(email, firstName, lang);
+
+    return res.status(200).json({ message: "Account deleted" });
+  } catch (err) {
+    console.error("[AUTH] Delete account error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// PUT /api/auth/lang
+export async function updateLang(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const { lang } = req.body;
+    if (lang !== "en" && lang !== "fr") {
+      return res.status(400).json({ error: "Invalid language" });
+    }
+
+    const updated = await UserModel.updateUser(req.userId, { lang } as Partial<UserModel.User>);
+    return res.status(200).json({ message: "Language updated", lang: updated.lang });
+  } catch (err) {
+    console.error("[AUTH] Update lang error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }

@@ -80,3 +80,7 @@ export async function updateUser(id: string, fields: Partial<User>): Promise<Use
   );
   return rows[0];
 }
+
+export async function deleteUser(id: string): Promise<void> {
+  await pool.query("DELETE FROM users WHERE id = $1", [id]);
+}

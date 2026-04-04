@@ -103,3 +103,61 @@ export async function sendResetEmail(
 
   return sendEmail(to, subject, html);
 }
+
+export async function sendWelcomeEmail(
+  to: string,
+  firstName: string,
+  lang: string = "en"
+): Promise<boolean> {
+  const subject =
+    lang === "fr"
+      ? "Bienvenue sur NBK Market !"
+      : "Welcome to NBK Market!";
+
+  const html =
+    lang === "fr"
+      ? `<div style="font-family: Arial, sans-serif; max-width: 450px; margin: 0 auto; padding: 24px;">
+           <h2 style="color: #0B1A2E; margin-bottom: 4px;">NBK Market</h2>
+           <p style="font-size: 15px; color: #333;">Bonjour ${firstName},</p>
+           <p style="font-size: 14px; color: #333; line-height: 1.6;">Bienvenue sur NBK Market ! Votre compte a été créé avec succès. Vous pouvez maintenant découvrir les meilleurs produits et boutiques d'Algérie.</p>
+           <p style="font-size: 13px; color: #888; margin-top: 20px;">L'équipe NBK Market</p>
+         </div>`
+      : `<div style="font-family: Arial, sans-serif; max-width: 450px; margin: 0 auto; padding: 24px;">
+           <h2 style="color: #0B1A2E; margin-bottom: 4px;">NBK Market</h2>
+           <p style="font-size: 15px; color: #333;">Hello ${firstName},</p>
+           <p style="font-size: 14px; color: #333; line-height: 1.6;">Welcome to NBK Market! Your account has been created successfully. You can now discover the best products and shops in Algeria.</p>
+           <p style="font-size: 13px; color: #888; margin-top: 20px;">The NBK Market Team</p>
+         </div>`;
+
+  return sendEmail(to, subject, html);
+}
+
+export async function sendAccountDeletedEmail(
+  to: string,
+  firstName: string,
+  lang: string = "en"
+): Promise<boolean> {
+  const subject =
+    lang === "fr"
+      ? "NBK Market - Votre compte a été supprimé"
+      : "NBK Market - Your account has been deleted";
+
+  const html =
+    lang === "fr"
+      ? `<div style="font-family: Arial, sans-serif; max-width: 450px; margin: 0 auto; padding: 24px;">
+           <h2 style="color: #0B1A2E; margin-bottom: 4px;">NBK Market</h2>
+           <p style="font-size: 15px; color: #333;">Bonjour ${firstName},</p>
+           <p style="font-size: 14px; color: #333; line-height: 1.6;">Votre compte NBK Market a été supprimé avec succès. Toutes vos données ont été définitivement effacées.</p>
+           <p style="font-size: 14px; color: #333;">Si vous n'êtes pas à l'origine de cette action, veuillez nous contacter immédiatement.</p>
+           <p style="font-size: 13px; color: #888; margin-top: 20px;">L'équipe NBK Market</p>
+         </div>`
+      : `<div style="font-family: Arial, sans-serif; max-width: 450px; margin: 0 auto; padding: 24px;">
+           <h2 style="color: #0B1A2E; margin-bottom: 4px;">NBK Market</h2>
+           <p style="font-size: 15px; color: #333;">Hello ${firstName},</p>
+           <p style="font-size: 14px; color: #333; line-height: 1.6;">Your NBK Market account has been successfully deleted. All your data has been permanently erased.</p>
+           <p style="font-size: 14px; color: #333;">If you did not initiate this action, please contact us immediately.</p>
+           <p style="font-size: 13px; color: #888; margin-top: 20px;">The NBK Market Team</p>
+         </div>`;
+
+  return sendEmail(to, subject, html);
+}
