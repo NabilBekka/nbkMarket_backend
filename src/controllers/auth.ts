@@ -16,6 +16,12 @@ function codeExpiresAt(): Date {
   return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
 }
 
+function formatDate(d: string | null): string | null {
+  if (!d) return null;
+  const date = new Date(d);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function sanitizeUser(user: UserModel.User) {
   return {
     id: user.id,
@@ -23,7 +29,7 @@ function sanitizeUser(user: UserModel.User) {
     first_name: user.first_name,
     last_name: user.last_name,
     username: user.username,
-    birth_date: user.birth_date,
+    birth_date: formatDate(user.birth_date),
     role: user.role,
     lang: user.lang,
     created_at: user.created_at,
