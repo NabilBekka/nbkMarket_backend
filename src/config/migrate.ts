@@ -25,7 +25,7 @@ const migration = `
   CREATE TABLE IF NOT EXISTS merchants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(255) UNIQUE NOT NULL, password_hash VARCHAR(255),
     first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, company_name VARCHAR(100) UNIQUE NOT NULL,
-    google_id VARCHAR(255) UNIQUE, reset_code VARCHAR(6), reset_expires TIMESTAMPTZ, refresh_token VARCHAR(500),
+    reset_code VARCHAR(6), reset_expires TIMESTAMPTZ, refresh_token VARCHAR(500),
     lang VARCHAR(2) DEFAULT 'en', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
   );
 
@@ -43,7 +43,6 @@ const migration = `
   CREATE INDEX IF NOT EXISTS idx_pending_username ON pending_registrations(username);
   CREATE INDEX IF NOT EXISTS idx_merchants_email ON merchants(email);
   CREATE INDEX IF NOT EXISTS idx_merchants_company ON merchants(company_name);
-  CREATE INDEX IF NOT EXISTS idx_merchants_google_id ON merchants(google_id);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_email ON pending_merchant_registrations(email);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_company ON pending_merchant_registrations(company_name);
 `;

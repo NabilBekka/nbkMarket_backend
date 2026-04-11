@@ -9,8 +9,6 @@ router.post("/verify-email", validate(verifyEmailSchema), C.verifyEmail);
 router.post("/resend-code", validate(resendCodeSchema), C.resendCode);
 router.get("/check-company/:name", C.checkCompanyName);
 router.post("/login", validate(loginSchema), C.login);
-router.post("/google", C.googleAuth);
-router.post("/google/register", C.googleRegister);
 router.post("/forgot-password", validate(forgotPasswordSchema), C.forgotPassword);
 router.post("/reset-password", validate(resetPasswordSchema), C.resetPassword);
 router.post("/refresh-token", C.refreshToken);

@@ -1,16 +1,13 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { OAuth2Client } from "google-auth-library";
 import * as MerchantModel from "../models/merchant";
 import * as PendingModel from "../models/pendingMerchant";
 import * as JWT from "../services/jwt";
 import * as Email from "../services/email";
 import { AuthRequest } from "../middlewares/auth";
-import { config } from "../config/env";
 
 const SALT_ROUNDS = 12;
 const CODE_EXPIRY_MINUTES = 10;
-const googleClient = new OAuth2Client(config.googleClientId);
 function codeExpiresAt(): Date { return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000); }
 function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, role: "merchant", lang: m.lang, created_at: m.created_at }; }
 
@@ -69,36 +66,6 @@ export async function login(req: Request, res: Response) { try {
   res.cookie("refreshToken", rt, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 7*24*60*60*1000, path: "/" });
   return res.json({ accessToken: at, user: sanitize(m) });
 } catch (err) { console.error("[MERCHANT] Login:", err); return res.status(500).json({ error: "Internal server error" }); } }
-
-export async function googleAuth(req: Request, res: Response) { try {
-  const { credential } = req.body;
-  if (!credential) return res.status(400).json({ error: "Google credential required" });
-  let googleId: string, email: string, given_name: string, family_name: string;
-  try { const t = await googleClient.verifyIdToken({ idToken: credential, audience: config.googleClientId }); const p = t.getPayload()!; googleId = p.sub; email = p.email!; given_name = p.given_name || ""; family_name = p.family_name || ""; }
-  catch { try { const r = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${credential}`); if (!r.ok) throw 0; const i = await r.json(); googleId = i.sub; email = i.email; given_name = i.given_name || ""; family_name = i.family_name || ""; } catch { return res.status(401).json({ error: "Invalid Google token" }); } }
-  const ex = (await MerchantModel.findByGoogleId(googleId)) || (await MerchantModel.findByEmail(email));
-  if (ex) {
-    if (!ex.google_id) await MerchantModel.updateMerchant(ex.id, { google_id: googleId } as any);
-    const at = JWT.generateAccessToken({ userId: ex.id, role: "merchant" }); const rt = JWT.generateRefreshToken({ userId: ex.id, role: "merchant" });
-    await MerchantModel.updateMerchant(ex.id, { refresh_token: rt } as any);
-    res.cookie("refreshToken", rt, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 7*24*60*60*1000, path: "/" });
-    return res.json({ accessToken: at, user: sanitize(ex), isExistingUser: true });
-  }
-  return res.json({ message: "Complete registration", googleData: { googleId, email, firstName: given_name, lastName: family_name }, isExistingUser: false });
-} catch (err) { console.error("[MERCHANT] Google:", err); return res.status(401).json({ error: "Invalid Google token" }); } }
-
-export async function googleRegister(req: Request, res: Response) { try {
-  const { googleId, email, firstName, lastName, companyName, password } = req.body;
-  if (!googleId || !email) return res.status(400).json({ error: "Missing Google data" });
-  if (await MerchantModel.findByEmail(email)) return res.status(409).json({ error: "Email already in use" });
-  if (await MerchantModel.findByCompanyName(companyName)) return res.status(409).json({ error: "Company name already taken" });
-  const m = await MerchantModel.createMerchant({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name: firstName, last_name: lastName, company_name: companyName, google_id: googleId, lang: "en" });
-  await Email.sendWelcomeEmail(m.email, m.first_name, m.lang);
-  const at = JWT.generateAccessToken({ userId: m.id, role: "merchant" }); const rt = JWT.generateRefreshToken({ userId: m.id, role: "merchant" });
-  await MerchantModel.updateMerchant(m.id, { refresh_token: rt } as any);
-  res.cookie("refreshToken", rt, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 7*24*60*60*1000, path: "/" });
-  return res.status(201).json({ accessToken: at, user: sanitize(m) });
-} catch (err: any) { console.error("[MERCHANT] GoogleReg:", err); if (err?.code === "23505") return res.status(409).json({ error: "Email or company name already in use" }); return res.status(500).json({ error: "Internal server error" }); } }
 
 export async function forgotPassword(req: Request, res: Response) { try {
   const { email, lang } = req.body;
