@@ -38,3 +38,12 @@ export const resetPasswordSchema = z.object({
   code: z.string().length(6),
   password: z.string().regex(passwordRegex, "Password does not meet requirements"),
 });
+
+export const merchantRegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().regex(passwordRegex, "Password does not meet requirements"),
+  first_name: z.string().min(2).regex(nameRegex, "Letters only"),
+  last_name: z.string().min(2).regex(nameRegex, "Letters only"),
+  company_name: z.string().min(2).max(100),
+  lang: z.enum(["en", "fr"]).optional(),
+});
