@@ -549,21 +549,30 @@ export async function updateProfile(req: AuthRequest, res: Response) {
 
     const fieldsToUpdate: Partial<UserModel.User> = {};
 
-    if (updates.first_name && updates.first_name !== user.first_name) {
-      fieldsToUpdate.first_name = updates.first_name;
+    const nameRegex = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+
+    if (updates.first_name) {
+      if (!nameRegex.test(updates.first_name)) return res.status(400).json({ error: "First name: letters only" });
+      if (updates.first_name !== user.first_name) fieldsToUpdate.first_name = updates.first_name;
     }
-    if (updates.last_name && updates.last_name !== user.last_name) {
-      fieldsToUpdate.last_name = updates.last_name;
+    if (updates.last_name) {
+      if (!nameRegex.test(updates.last_name)) return res.status(400).json({ error: "Last name: letters only" });
+      if (updates.last_name !== user.last_name) fieldsToUpdate.last_name = updates.last_name;
     }
-    if (updates.birth_date && updates.birth_date !== user.birth_date) {
-      fieldsToUpdate.birth_date = updates.birth_date;
+    if (updates.birth_date) {
+      if (!dateRegex.test(updates.birth_date)) return res.status(400).json({ error: "Invalid date format" });
+      if (updates.birth_date !== user.birth_date) fieldsToUpdate.birth_date = updates.birth_date;
     }
-    if (updates.email && updates.email !== user.email) {
-      const existing = await UserModel.findByEmail(updates.email);
-      if (existing) {
-        return res.status(409).json({ error: "Email already in use" });
+    if (updates.email) {
+      if (!emailRegex.test(updates.email)) return res.status(400).json({ error: "Invalid email format" });
+      if (updates.email !== user.email) {
+        const existing = await UserModel.findByEmail(updates.email);
+        if (existing) return res.status(409).json({ error: "Email already in use" });
+        fieldsToUpdate.email = updates.email;
       }
-      fieldsToUpdate.email = updates.email;
     }
     if (updates.username && updates.username !== user.username) {
       const existing = await UserModel.findByUsername(updates.username);
@@ -573,6 +582,7 @@ export async function updateProfile(req: AuthRequest, res: Response) {
       fieldsToUpdate.username = updates.username;
     }
     if (updates.new_password) {
+      if (!passwordRegex.test(updates.new_password)) return res.status(400).json({ error: "Password does not meet requirements" });
       fieldsToUpdate.password_hash = await bcrypt.hash(updates.new_password, SALT_ROUNDS);
     }
 

@@ -117,12 +117,29 @@ export async function updateProfile(req: AuthRequest, res: Response) { try {
   const m = await MerchantModel.findById(req.userId);
   if (!m || !m.password_hash) return res.status(404).json({ error: "Not found" });
   if (!(await bcrypt.compare(password, m.password_hash))) return res.status(401).json({ error: "Incorrect password" });
+
+  const nameRegex = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+
   const f: any = {};
-  if (updates.first_name && updates.first_name !== m.first_name) f.first_name = updates.first_name;
-  if (updates.last_name && updates.last_name !== m.last_name) f.last_name = updates.last_name;
-  if (updates.email && updates.email !== m.email) { if (await MerchantModel.findByEmail(updates.email)) return res.status(409).json({ error: "Email already in use" }); f.email = updates.email; }
+  if (updates.first_name) {
+    if (!nameRegex.test(updates.first_name)) return res.status(400).json({ error: "First name: letters only" });
+    if (updates.first_name !== m.first_name) f.first_name = updates.first_name;
+  }
+  if (updates.last_name) {
+    if (!nameRegex.test(updates.last_name)) return res.status(400).json({ error: "Last name: letters only" });
+    if (updates.last_name !== m.last_name) f.last_name = updates.last_name;
+  }
+  if (updates.email) {
+    if (!emailRegex.test(updates.email)) return res.status(400).json({ error: "Invalid email format" });
+    if (updates.email !== m.email) { if (await MerchantModel.findByEmail(updates.email)) return res.status(409).json({ error: "Email already in use" }); f.email = updates.email; }
+  }
   if (updates.company_name && updates.company_name !== m.company_name) { if (await MerchantModel.findByCompanyName(updates.company_name)) return res.status(409).json({ error: "Company name already taken" }); f.company_name = updates.company_name; }
-  if (updates.new_password) f.password_hash = await bcrypt.hash(updates.new_password, SALT_ROUNDS);
+  if (updates.new_password) {
+    if (!passwordRegex.test(updates.new_password)) return res.status(400).json({ error: "Password does not meet requirements" });
+    f.password_hash = await bcrypt.hash(updates.new_password, SALT_ROUNDS);
+  }
   if (!Object.keys(f).length) return res.json({ message: "No changes", user: sanitize(m) });
   const u = await MerchantModel.updateMerchant(m.id, f);
   return res.json({ message: "Profile updated", user: sanitize(u) });
