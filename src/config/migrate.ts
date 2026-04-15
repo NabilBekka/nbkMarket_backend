@@ -45,6 +45,34 @@ const migration = `
   CREATE INDEX IF NOT EXISTS idx_merchants_company ON merchants(company_name);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_email ON pending_merchant_registrations(email);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_company ON pending_merchant_registrations(company_name);
+
+  CREATE TABLE IF NOT EXISTS products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    price DECIMAL(12,2) NOT NULL,
+    main_image VARCHAR(500) NOT NULL,
+    image_2 VARCHAR(500),
+    image_3 VARCHAR(500),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(product_id, user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_products_merchant ON products(merchant_id);
+  CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
+  CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
 `;
 
 async function migrate() {
