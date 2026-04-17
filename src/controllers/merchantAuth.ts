@@ -9,17 +9,17 @@ import { AuthRequest } from "../middlewares/auth";
 const SALT_ROUNDS = 12;
 const CODE_EXPIRY_MINUTES = 10;
 function codeExpiresAt(): Date { return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000); }
-function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, role: "merchant", lang: m.lang, created_at: m.created_at }; }
+function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, category_id: m.category_id, role: "merchant", lang: m.lang, created_at: m.created_at }; }
 
 export async function register(req: Request, res: Response) { try {
-  const { email, password, first_name, last_name, company_name, lang } = req.body;
+  const { email, password, first_name, last_name, company_name, category_id, lang } = req.body;
   if (await MerchantModel.findByEmail(email)) return res.status(409).json({ error: "Email already in use" });
   if (await MerchantModel.findByCompanyName(company_name)) return res.status(409).json({ error: "Company name already taken" });
   const pc = await PendingModel.findByCompanyName(company_name);
   if (pc && pc.email !== email) return res.status(409).json({ error: "Company name already taken" });
   await PendingModel.deleteByEmail(email);
   const code = Email.generateCode();
-  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, lang: lang || "en", verification_code: code, verification_expires: codeExpiresAt() });
+  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, category_id: category_id || null, lang: lang || "en", verification_code: code, verification_expires: codeExpiresAt() });
   await Email.sendVerificationEmail(email, code, lang || "en");
   return res.status(200).json({ message: "Verification code sent", email });
 } catch (err) { console.error("[MERCHANT] Register:", err); return res.status(500).json({ error: "Internal server error" }); } }
@@ -29,7 +29,7 @@ export async function verifyEmail(req: Request, res: Response) { try {
   const p = await PendingModel.findByEmail(email);
   if (!p) return res.status(404).json({ error: "No pending registration found" });
   if (p.verification_code !== code || new Date(p.verification_expires) < new Date()) return res.status(400).json({ error: "Invalid or expired code" });
-  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, lang: p.lang });
+  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, category_id: p.category_id, lang: p.lang });
   await PendingModel.deleteByEmail(email);
   await Email.sendWelcomeEmail(m.email, m.first_name, m.lang);
   const at = JWT.generateAccessToken({ userId: m.id, role: "merchant" }); const rt = JWT.generateRefreshToken({ userId: m.id, role: "merchant" });

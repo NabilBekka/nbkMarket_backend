@@ -6,7 +6,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "db:migrate": "tsx src/config/migrate.ts"
+    "db:migrate": "tsx src/config/migrate.ts",
+    "db:seed": "tsx src/config/seed-categories.ts"
   },
   "dependencies": {
     "express": "^4.21.0",

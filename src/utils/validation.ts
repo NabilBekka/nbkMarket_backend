@@ -45,5 +45,6 @@ export const merchantRegisterSchema = z.object({
   first_name: z.string().min(2).regex(nameRegex, "Letters only"),
   last_name: z.string().min(2).regex(nameRegex, "Letters only"),
   company_name: z.string().min(2).max(100),
+  category_id: z.number().int().positive().optional(),
   lang: z.enum(["en", "fr"]).optional(),
 });
