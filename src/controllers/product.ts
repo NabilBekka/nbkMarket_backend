@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import * as ProductModel from "../models/product";
 import { AuthRequest } from "../middlewares/auth";
 
@@ -146,6 +148,22 @@ export async function remove(req: AuthRequest, res: Response) {
     const existing = await ProductModel.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: "Product not found" });
     if (existing.merchant_id !== req.userId) return res.status(403).json({ error: "Not your product" });
+
+    // Delete image files from disk
+    const images = [existing.main_image, existing.image_2, existing.image_3].filter(Boolean) as string[];
+    for (const img of images) {
+      try {
+        // Extract path: "/uploads/products/xxx.jpg" or full URL
+        const filePath = img.includes("/uploads/") ? img.substring(img.indexOf("/uploads/")) : null;
+        if (filePath) {
+          const fullPath = path.join(process.cwd(), filePath);
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+            console.log("[PRODUCT] Deleted image:", fullPath);
+          }
+        }
+      } catch (e) { console.error("[PRODUCT] Failed to delete image:", img, e); }
+    }
 
     await ProductModel.remove(req.params.id);
     return res.json({ message: "Product deleted" });
