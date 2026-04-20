@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import * as MerchantModel from "../models/merchant";
 import * as PendingModel from "../models/pendingMerchant";
+import * as WilayaModel from "../models/wilaya";
 import * as JWT from "../services/jwt";
 import * as Email from "../services/email";
 import { AuthRequest } from "../middlewares/auth";
@@ -9,18 +10,19 @@ import { AuthRequest } from "../middlewares/auth";
 const SALT_ROUNDS = 12;
 const CODE_EXPIRY_MINUTES = 10;
 function codeExpiresAt(): Date { return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000); }
-function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, category_id: m.category_id, role: "merchant", lang: m.lang, created_at: m.created_at }; }
+function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, category_id: m.category_id, wilaya_code: m.wilaya_code, sells_buys: m.sells_buys, offers_services: m.offers_services, has_physical_shop: m.has_physical_shop, offers_delivery: m.offers_delivery, role: "merchant", lang: m.lang, created_at: m.created_at }; }
 
 export async function register(req: Request, res: Response) { try {
-  const { email, password, first_name, last_name, company_name, category_id, lang } = req.body;
+  const { email, password, first_name, last_name, company_name, category_id, wilaya_code, sells_buys, offers_services, has_physical_shop, offers_delivery, delivery_wilayas, lang } = req.body;
   if (await MerchantModel.findByEmail(email)) return res.status(409).json({ error: "Email already in use" });
   if (await MerchantModel.findByCompanyName(company_name)) return res.status(409).json({ error: "Company name already taken" });
   const pc = await PendingModel.findByCompanyName(company_name);
   if (pc && pc.email !== email) return res.status(409).json({ error: "Company name already taken" });
   await PendingModel.deleteByEmail(email);
-  const code = Email.generateCode();
-  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, category_id: category_id || null, lang: lang || "en", verification_code: code, verification_expires: codeExpiresAt() });
-  await Email.sendVerificationEmail(email, code, lang || "en");
+  const codeSent = Email.generateCode();
+  const dwJson = Array.isArray(delivery_wilayas) ? JSON.stringify(delivery_wilayas) : "[]";
+  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, category_id: category_id || null, wilaya_code: wilaya_code || null, sells_buys: sells_buys ?? false, offers_services: offers_services ?? false, has_physical_shop: has_physical_shop ?? false, offers_delivery: offers_delivery ?? false, delivery_wilayas: dwJson, lang: lang || "en", verification_code: codeSent, verification_expires: codeExpiresAt() });
+  await Email.sendVerificationEmail(email, codeSent, lang || "en");
   return res.status(200).json({ message: "Verification code sent", email });
 } catch (err) { console.error("[MERCHANT] Register:", err); return res.status(500).json({ error: "Internal server error" }); } }
 
@@ -29,7 +31,16 @@ export async function verifyEmail(req: Request, res: Response) { try {
   const p = await PendingModel.findByEmail(email);
   if (!p) return res.status(404).json({ error: "No pending registration found" });
   if (p.verification_code !== code || new Date(p.verification_expires) < new Date()) return res.status(400).json({ error: "Invalid or expired code" });
-  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, category_id: p.category_id, lang: p.lang });
+  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, category_id: p.category_id, wilaya_code: p.wilaya_code, sells_buys: p.sells_buys, offers_services: p.offers_services, has_physical_shop: p.has_physical_shop, offers_delivery: p.offers_delivery, lang: p.lang });
+
+  // Save delivery wilayas
+  if (p.offers_delivery && p.delivery_wilayas) {
+    try {
+      const codes: number[] = JSON.parse(p.delivery_wilayas);
+      if (codes.length > 0) await WilayaModel.setDeliveryWilayas(m.id, codes);
+    } catch (e) { console.error("[MERCHANT] Failed to parse delivery_wilayas:", e); }
+  }
+
   await PendingModel.deleteByEmail(email);
   await Email.sendWelcomeEmail(m.email, m.first_name, m.lang);
   const at = JWT.generateAccessToken({ userId: m.id, role: "merchant" }); const rt = JWT.generateRefreshToken({ userId: m.id, role: "merchant" });

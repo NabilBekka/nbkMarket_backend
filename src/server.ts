@@ -9,6 +9,7 @@ import merchantAuthRoutes from "./routes/merchantAuth";
 import productRoutes from "./routes/product";
 import uploadRoutes from "./routes/upload";
 import categoryRoutes from "./routes/category";
+import wilayaRoutes from "./routes/wilaya";
 
 const app = express();
 app.use(cors({ origin: config.corsOrigins, credentials: true }));
@@ -25,6 +26,7 @@ app.use("/api/merchant/auth", merchantAuthRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/wilayas", wilayaRoutes);
 
 async function start() { await testConnection(); app.listen(config.port, () => { console.log(`[NBK Market API] Running on port ${config.port}`); }); }
 start();

@@ -46,5 +46,11 @@ export const merchantRegisterSchema = z.object({
   last_name: z.string().min(2).regex(nameRegex, "Letters only"),
   company_name: z.string().min(2).max(100),
   category_id: z.number().int().positive().optional(),
+  wilaya_code: z.number().int().min(1).max(69).optional(),
+  sells_buys: z.boolean().optional(),
+  offers_services: z.boolean().optional(),
+  has_physical_shop: z.boolean().optional(),
+  offers_delivery: z.boolean().optional(),
+  delivery_wilayas: z.array(z.number().int().min(1).max(69)).max(69).optional(),
   lang: z.enum(["en", "fr"]).optional(),
 });

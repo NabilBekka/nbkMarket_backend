@@ -23,6 +23,12 @@ const migration = `
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
 
+  CREATE TABLE IF NOT EXISTS wilayas (
+    code INTEGER PRIMARY KEY,
+    name_fr VARCHAR(100) NOT NULL,
+    name_en VARCHAR(100) NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     parent_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
@@ -38,6 +44,11 @@ const migration = `
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(255) UNIQUE NOT NULL, password_hash VARCHAR(255),
     first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, company_name VARCHAR(100) UNIQUE NOT NULL,
     category_id INTEGER REFERENCES categories(id),
+    wilaya_code INTEGER REFERENCES wilayas(code),
+    sells_buys BOOLEAN DEFAULT false,
+    offers_services BOOLEAN DEFAULT false,
+    has_physical_shop BOOLEAN DEFAULT false,
+    offers_delivery BOOLEAN DEFAULT false,
     reset_code VARCHAR(6), reset_expires TIMESTAMPTZ, refresh_token VARCHAR(500),
     lang VARCHAR(2) DEFAULT 'en', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
   );
@@ -46,8 +57,20 @@ const migration = `
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(255) NOT NULL, password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, company_name VARCHAR(100) NOT NULL,
     category_id INTEGER REFERENCES categories(id),
+    wilaya_code INTEGER REFERENCES wilayas(code),
+    sells_buys BOOLEAN DEFAULT false,
+    offers_services BOOLEAN DEFAULT false,
+    has_physical_shop BOOLEAN DEFAULT false,
+    offers_delivery BOOLEAN DEFAULT false,
+    delivery_wilayas TEXT DEFAULT '[]',
     lang VARCHAR(2) DEFAULT 'en', verification_code VARCHAR(6) NOT NULL, verification_expires TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS merchant_delivery_wilayas (
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    wilaya_code INTEGER NOT NULL REFERENCES wilayas(code),
+    PRIMARY KEY (merchant_id, wilaya_code)
   );
 
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -58,6 +81,9 @@ const migration = `
   CREATE INDEX IF NOT EXISTS idx_merchants_email ON merchants(email);
   CREATE INDEX IF NOT EXISTS idx_merchants_company ON merchants(company_name);
   CREATE INDEX IF NOT EXISTS idx_merchants_category ON merchants(category_id);
+  CREATE INDEX IF NOT EXISTS idx_merchants_wilaya ON merchants(wilaya_code);
+  CREATE INDEX IF NOT EXISTS idx_delivery_merchant ON merchant_delivery_wilayas(merchant_id);
+  CREATE INDEX IF NOT EXISTS idx_delivery_wilaya ON merchant_delivery_wilayas(wilaya_code);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_email ON pending_merchant_registrations(email);
   CREATE INDEX IF NOT EXISTS idx_pending_merchant_company ON pending_merchant_registrations(company_name);
 
