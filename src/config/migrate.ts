@@ -3,6 +3,7 @@ import { pool } from "./db";
 const migration = `
   CREATE EXTENSION IF NOT EXISTS "pgcrypto";
   CREATE EXTENSION IF NOT EXISTS "unaccent";
+  CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
   DO $$ BEGIN
     CREATE TYPE user_role AS ENUM ('client', 'merchant');
