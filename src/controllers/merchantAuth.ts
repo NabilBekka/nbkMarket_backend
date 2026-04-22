@@ -13,10 +13,10 @@ import { AuthRequest } from "../middlewares/auth";
 const SALT_ROUNDS = 12;
 const CODE_EXPIRY_MINUTES = 10;
 function codeExpiresAt(): Date { return new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000); }
-function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, category_id: m.category_id, wilaya_code: m.wilaya_code, sells_buys: m.sells_buys, offers_services: m.offers_services, has_physical_shop: m.has_physical_shop, offers_delivery: m.offers_delivery, role: "merchant", lang: m.lang, created_at: m.created_at }; }
+function sanitize(m: MerchantModel.Merchant) { return { id: m.id, email: m.email, first_name: m.first_name, last_name: m.last_name, company_name: m.company_name, category_id: m.category_id, wilaya_code: m.wilaya_code, profile_image: m.profile_image, cover_image: m.cover_image, address: m.address, description: m.description, sells_buys: m.sells_buys, offers_services: m.offers_services, has_physical_shop: m.has_physical_shop, offers_delivery: m.offers_delivery, role: "merchant", lang: m.lang, created_at: m.created_at }; }
 
 export async function register(req: Request, res: Response) { try {
-  const { email, password, first_name, last_name, company_name, category_id, wilaya_code, sells_buys, offers_services, has_physical_shop, offers_delivery, delivery_wilayas, lang } = req.body;
+  const { email, password, first_name, last_name, company_name, category_id, wilaya_code, profile_image, cover_image, address, description, sells_buys, offers_services, has_physical_shop, offers_delivery, delivery_wilayas, lang } = req.body;
   if (await MerchantModel.findByEmail(email)) return res.status(409).json({ error: "Email already in use" });
   if (await MerchantModel.findByCompanyName(company_name)) return res.status(409).json({ error: "Company name already taken" });
   const pc = await PendingModel.findByCompanyName(company_name);
@@ -24,7 +24,7 @@ export async function register(req: Request, res: Response) { try {
   await PendingModel.deleteByEmail(email);
   const codeSent = Email.generateCode();
   const dwJson = Array.isArray(delivery_wilayas) ? JSON.stringify(delivery_wilayas) : "[]";
-  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, category_id: category_id || null, wilaya_code: wilaya_code || null, sells_buys: sells_buys ?? false, offers_services: offers_services ?? false, has_physical_shop: has_physical_shop ?? false, offers_delivery: offers_delivery ?? false, delivery_wilayas: dwJson, lang: lang || "en", verification_code: codeSent, verification_expires: codeExpiresAt() });
+  await PendingModel.create({ email, password_hash: await bcrypt.hash(password, SALT_ROUNDS), first_name, last_name, company_name, category_id: category_id || null, wilaya_code: wilaya_code || null, profile_image: profile_image || null, cover_image: cover_image || null, address: address || null, description: description || null, sells_buys: sells_buys ?? false, offers_services: offers_services ?? false, has_physical_shop: has_physical_shop ?? false, offers_delivery: offers_delivery ?? false, delivery_wilayas: dwJson, lang: lang || "en", verification_code: codeSent, verification_expires: codeExpiresAt() });
   await Email.sendVerificationEmail(email, codeSent, lang || "en");
   return res.status(200).json({ message: "Verification code sent", email });
 } catch (err) { console.error("[MERCHANT] Register:", err); return res.status(500).json({ error: "Internal server error" }); } }
@@ -34,7 +34,7 @@ export async function verifyEmail(req: Request, res: Response) { try {
   const p = await PendingModel.findByEmail(email);
   if (!p) return res.status(404).json({ error: "No pending registration found" });
   if (p.verification_code !== code || new Date(p.verification_expires) < new Date()) return res.status(400).json({ error: "Invalid or expired code" });
-  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, category_id: p.category_id, wilaya_code: p.wilaya_code, sells_buys: p.sells_buys, offers_services: p.offers_services, has_physical_shop: p.has_physical_shop, offers_delivery: p.offers_delivery, lang: p.lang });
+  const m = await MerchantModel.createMerchant({ email: p.email, password_hash: p.password_hash, first_name: p.first_name, last_name: p.last_name, company_name: p.company_name, category_id: p.category_id, wilaya_code: p.wilaya_code, profile_image: p.profile_image, cover_image: p.cover_image, address: p.address, description: p.description, sells_buys: p.sells_buys, offers_services: p.offers_services, has_physical_shop: p.has_physical_shop, offers_delivery: p.offers_delivery, lang: p.lang });
 
   // Save delivery wilayas
   if (p.offers_delivery && p.delivery_wilayas) {
@@ -150,6 +150,22 @@ export async function updateProfile(req: AuthRequest, res: Response) { try {
     if (updates.email !== m.email) { if (await MerchantModel.findByEmail(updates.email)) return res.status(409).json({ error: "Email already in use" }); f.email = updates.email; }
   }
   if (updates.company_name && updates.company_name !== m.company_name) { if (await MerchantModel.findByCompanyName(updates.company_name)) return res.status(409).json({ error: "Company name already taken" }); f.company_name = updates.company_name; }
+  if (updates.profile_image !== undefined) {
+    // Delete old profile image from disk
+    if (m.profile_image && m.profile_image !== updates.profile_image) {
+      try { const fp = m.profile_image.includes("/uploads/") ? m.profile_image.substring(m.profile_image.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+    }
+    f.profile_image = updates.profile_image || null;
+  }
+  if (updates.cover_image !== undefined) {
+    // Delete old cover image from disk
+    if (m.cover_image && m.cover_image !== updates.cover_image) {
+      try { const fp = m.cover_image.includes("/uploads/") ? m.cover_image.substring(m.cover_image.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+    }
+    f.cover_image = updates.cover_image || null;
+  }
+  if (updates.address !== undefined) f.address = updates.address || null;
+  if (updates.description !== undefined) f.description = updates.description || null;
   if (updates.new_password) {
     if (!passwordRegex.test(updates.new_password)) return res.status(400).json({ error: "Password does not meet requirements" });
     f.password_hash = await bcrypt.hash(updates.new_password, SALT_ROUNDS);
@@ -179,6 +195,17 @@ export async function deleteAccount(req: AuthRequest, res: Response) { try {
         }
       } catch (e) { console.error("[MERCHANT] Failed to delete image:", img, e); }
     }
+  }
+
+  // Delete profile and cover images from disk
+  for (const img of [m.profile_image, m.cover_image].filter(Boolean) as string[]) {
+    try {
+      const filePath = img.includes("/uploads/") ? img.substring(img.indexOf("/uploads/")) : null;
+      if (filePath) {
+        const fullPath = path.join(process.cwd(), filePath);
+        if (fs.existsSync(fullPath)) { fs.unlinkSync(fullPath); console.log("[MERCHANT] Deleted shop image:", fullPath); }
+      }
+    } catch (e) { console.error("[MERCHANT] Failed to delete shop image:", img, e); }
   }
 
   const { email, first_name, lang } = m;

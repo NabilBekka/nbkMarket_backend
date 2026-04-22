@@ -141,10 +141,23 @@ export async function update(req: AuthRequest, res: Response) {
     }
     if (main_image !== undefined) {
       if (!main_image.trim()) return res.status(400).json({ error: "Main image cannot be empty" });
+      if (existing.main_image && existing.main_image !== main_image.trim()) {
+        try { const fp = existing.main_image.includes("/uploads/") ? existing.main_image.substring(existing.main_image.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+      }
       fields.main_image = main_image.trim();
     }
-    if (image_2 !== undefined) fields.image_2 = image_2?.trim() || null;
-    if (image_3 !== undefined) fields.image_3 = image_3?.trim() || null;
+    if (image_2 !== undefined) {
+      if (existing.image_2 && existing.image_2 !== (image_2?.trim() || null)) {
+        try { const fp = existing.image_2.includes("/uploads/") ? existing.image_2.substring(existing.image_2.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+      }
+      fields.image_2 = image_2?.trim() || null;
+    }
+    if (image_3 !== undefined) {
+      if (existing.image_3 && existing.image_3 !== (image_3?.trim() || null)) {
+        try { const fp = existing.image_3.includes("/uploads/") ? existing.image_3.substring(existing.image_3.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+      }
+      fields.image_3 = image_3?.trim() || null;
+    }
 
     if (!Object.keys(fields).length) return res.json({ message: "No changes" });
 
