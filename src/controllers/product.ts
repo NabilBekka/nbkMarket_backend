@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import * as ProductModel from "../models/product";
+import * as SearchModel from "../models/search";
 import { AuthRequest } from "../middlewares/auth";
 
 function sanitize(p: ProductModel.ProductWithRating) {
@@ -87,10 +88,25 @@ export async function getByMerchant(req: Request, res: Response) {
   }
 }
 
-// GET /api/products/my — merchant's own products
+// GET /api/products/my/list?q=ecouteur&lang=fr — merchant's own products (with optional fuzzy search)
 export async function getMyProducts(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+
+    const q = (req.query.q as string || "").trim();
+    const lang = (req.query.lang as string) === "fr" ? "fr" : "en";
+
+    if (q.length > 0) {
+      const results = await SearchModel.searchMyProducts(q, req.userId, lang);
+      const formatted = results.map(r => ({
+        id: r.id, title: r.title, price: parseFloat(r.price),
+        main_image: r.main_image, avg_rating: r.avg_rating ? parseFloat(r.avg_rating) : null,
+        review_count: parseInt(r.review_count, 10), company_name: r.company_name,
+        merchant_id: r.merchant_id, created_at: null, updated_at: null,
+      }));
+      return res.json({ products: formatted });
+    }
+
     const products = await ProductModel.findByMerchant(req.userId);
     return res.json({ products: products.map(sanitize) });
   } catch (err) {
