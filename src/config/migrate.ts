@@ -112,9 +112,22 @@ const migration = `
     UNIQUE(product_id, user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS merchant_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(merchant_id, user_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_products_merchant ON products(merchant_id);
   CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
   CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
+  CREATE INDEX IF NOT EXISTS idx_merchant_reviews_merchant ON merchant_reviews(merchant_id);
+  CREATE INDEX IF NOT EXISTS idx_merchant_reviews_user ON merchant_reviews(user_id);
 `;
 
 async function migrate() {
