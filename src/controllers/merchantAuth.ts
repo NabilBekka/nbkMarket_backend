@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import fs from "fs";
+import path from "path";
 import * as MerchantModel from "../models/merchant";
 import * as PendingModel from "../models/pendingMerchant";
+import * as ProductModel from "../models/product";
 import * as WilayaModel from "../models/wilaya";
 import * as JWT from "../services/jwt";
 import * as Email from "../services/email";
@@ -162,6 +165,22 @@ export async function deleteAccount(req: AuthRequest, res: Response) { try {
   const m = await MerchantModel.findById(req.userId);
   if (!m || !m.password_hash) return res.status(404).json({ error: "Not found" });
   if (!(await bcrypt.compare(password, m.password_hash))) return res.status(401).json({ error: "Incorrect password" });
+
+  // Delete all product images from disk before cascade
+  const products = await ProductModel.findByMerchant(m.id);
+  for (const p of products) {
+    const images = [p.main_image, p.image_2, p.image_3].filter(Boolean) as string[];
+    for (const img of images) {
+      try {
+        const filePath = img.includes("/uploads/") ? img.substring(img.indexOf("/uploads/")) : null;
+        if (filePath) {
+          const fullPath = path.join(process.cwd(), filePath);
+          if (fs.existsSync(fullPath)) { fs.unlinkSync(fullPath); console.log("[MERCHANT] Deleted image:", fullPath); }
+        }
+      } catch (e) { console.error("[MERCHANT] Failed to delete image:", img, e); }
+    }
+  }
+
   const { email, first_name, lang } = m;
   await MerchantModel.deleteMerchant(m.id);
   res.clearCookie("refreshToken", { path: "/" });
