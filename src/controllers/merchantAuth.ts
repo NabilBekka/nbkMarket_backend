@@ -222,3 +222,44 @@ export async function updateLang(req: AuthRequest, res: Response) { try {
   const u = await MerchantModel.updateMerchant(req.userId, { lang } as any);
   return res.json({ message: "Language updated", lang: u.lang });
 } catch (err) { return res.status(500).json({ error: "Internal server error" }); } }
+
+export async function updateImages(req: AuthRequest, res: Response) { try {
+  if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+  const m = await MerchantModel.findById(req.userId);
+  if (!m) return res.status(404).json({ error: "Not found" });
+  const f: any = {};
+  if (req.body.profile_image !== undefined) {
+    if (m.profile_image && m.profile_image !== req.body.profile_image) {
+      try { const fp = m.profile_image.includes("/uploads/") ? m.profile_image.substring(m.profile_image.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+    }
+    f.profile_image = req.body.profile_image || null;
+  }
+  if (req.body.cover_image !== undefined) {
+    if (m.cover_image && m.cover_image !== req.body.cover_image) {
+      try { const fp = m.cover_image.includes("/uploads/") ? m.cover_image.substring(m.cover_image.indexOf("/uploads/")) : null; if (fp) { const full = path.join(process.cwd(), fp); if (fs.existsSync(full)) fs.unlinkSync(full); } } catch (e) { /* ignore */ }
+    }
+    f.cover_image = req.body.cover_image || null;
+  }
+  if (req.body.description !== undefined) f.description = req.body.description || null;
+  if (req.body.address !== undefined) f.address = req.body.address || null;
+  if (!Object.keys(f).length) return res.json({ message: "No changes", user: sanitize(m) });
+  const u = await MerchantModel.updateMerchant(m.id, f);
+  return res.json({ message: "Updated", user: sanitize(u) });
+} catch (err) { console.error("[MERCHANT] UpdateImages:", err); return res.status(500).json({ error: "Internal server error" }); } }
+
+export async function getMyDeliveryWilayas(req: AuthRequest, res: Response) { try {
+  if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+  const wilayas = await WilayaModel.getDeliveryWilayas(req.userId);
+  return res.json({ wilayas });
+} catch (err) { console.error("[MERCHANT] GetDeliveryWilayas:", err); return res.status(500).json({ error: "Internal server error" }); } }
+
+export async function updateDeliveryWilayas(req: AuthRequest, res: Response) { try {
+  if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+  const { delivery_wilayas } = req.body;
+  if (!Array.isArray(delivery_wilayas)) return res.status(400).json({ error: "delivery_wilayas must be an array" });
+  const codes: number[] = delivery_wilayas.filter((c: unknown) => typeof c === "number" && c >= 1 && c <= 69);
+  if (codes.length > 69) return res.status(400).json({ error: "Too many wilayas" });
+  await WilayaModel.setDeliveryWilayas(req.userId, codes);
+  const wilayas = await WilayaModel.getDeliveryWilayas(req.userId);
+  return res.json({ wilayas });
+} catch (err) { console.error("[MERCHANT] UpdateDeliveryWilayas:", err); return res.status(500).json({ error: "Internal server error" }); } }

@@ -17,4 +17,7 @@ router.get("/me", authMiddleware, C.getMe);
 router.put("/profile", authMiddleware, C.updateProfile);
 router.delete("/account", authMiddleware, C.deleteAccount);
 router.put("/lang", authMiddleware, C.updateLang);
+router.put("/update-images", authMiddleware, C.updateImages);
+router.get("/delivery-wilayas", authMiddleware, C.getMyDeliveryWilayas);
+router.put("/update-delivery-wilayas", authMiddleware, C.updateDeliveryWilayas);
 export default router;
