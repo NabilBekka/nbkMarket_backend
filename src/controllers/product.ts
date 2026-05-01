@@ -12,6 +12,7 @@ function sanitize(p: ProductModel.ProductWithRating) {
     company_name: p.company_name,
     title: p.title,
     description: p.description,
+    keywords: p.keywords || "",
     price: parseFloat(p.price),
     main_image: p.main_image,
     image_2: p.image_2,
@@ -28,7 +29,7 @@ export async function create(req: AuthRequest, res: Response) {
   try {
     if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
 
-    const { title, description, price, main_image, image_2, image_3 } = req.body;
+    const { title, description, keywords, price, main_image, image_2, image_3 } = req.body;
 
     if (!title || !title.trim()) return res.status(400).json({ error: "Title is required" });
     if (!description || !description.trim()) return res.status(400).json({ error: "Description is required" });
@@ -39,6 +40,7 @@ export async function create(req: AuthRequest, res: Response) {
       merchant_id: req.userId,
       title: title.trim(),
       description: description.trim(),
+      keywords: keywords?.trim() || "",
       price: parseFloat(price),
       main_image: main_image.trim(),
       image_2: image_2?.trim() || null,
@@ -124,7 +126,7 @@ export async function update(req: AuthRequest, res: Response) {
     if (!existing) return res.status(404).json({ error: "Product not found" });
     if (existing.merchant_id !== req.userId) return res.status(403).json({ error: "Not your product" });
 
-    const { title, description, price, main_image, image_2, image_3 } = req.body;
+    const { title, description, keywords, price, main_image, image_2, image_3 } = req.body;
     const fields: Partial<ProductModel.Product> = {};
 
     if (title !== undefined) {
@@ -134,6 +136,9 @@ export async function update(req: AuthRequest, res: Response) {
     if (description !== undefined) {
       if (!description.trim()) return res.status(400).json({ error: "Description cannot be empty" });
       fields.description = description.trim();
+    }
+    if (keywords !== undefined) {
+      fields.keywords = keywords?.trim() || "";
     }
     if (price !== undefined) {
       if (isNaN(price) || price <= 0) return res.status(400).json({ error: "Price must be a positive number" });

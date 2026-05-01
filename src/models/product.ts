@@ -5,6 +5,7 @@ export interface Product {
   merchant_id: string;
   title: string;
   description: string;
+  keywords: string;
   price: string;
   main_image: string;
   image_2: string | null;
@@ -20,13 +21,13 @@ export interface ProductWithRating extends Product {
 }
 
 export async function create(data: {
-  merchant_id: string; title: string; description: string; price: number;
+  merchant_id: string; title: string; description: string; keywords?: string; price: number;
   main_image: string; image_2?: string | null; image_3?: string | null;
 }): Promise<Product> {
   const { rows } = await pool.query(
-    `INSERT INTO products (merchant_id, title, description, price, main_image, image_2, image_3)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [data.merchant_id, data.title, data.description, data.price, data.main_image, data.image_2 || null, data.image_3 || null]
+    `INSERT INTO products (merchant_id, title, description, keywords, price, main_image, image_2, image_3)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [data.merchant_id, data.title, data.description, data.keywords || "", data.price, data.main_image, data.image_2 || null, data.image_3 || null]
   );
   return rows[0];
 }

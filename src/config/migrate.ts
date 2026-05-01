@@ -101,6 +101,7 @@ const migration = `
     merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
+    keywords TEXT DEFAULT '',
     price DECIMAL(12,2) NOT NULL,
     main_image VARCHAR(500) NOT NULL,
     image_2 VARCHAR(500),

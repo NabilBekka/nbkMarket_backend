@@ -23,10 +23,11 @@ export interface ProductResult {
   score: number;
 }
 
-// Score formula for products: title x1.5, description x1.0, category x0.8
+// Score formula for products: title x1.5, keywords x1.3, description x1.0, category x0.8
 function productScoreSQL(q: string): string {
   return `GREATEST(
     similarity(unaccent(lower(p.title)), unaccent(lower(${q}))) * 1.5,
+    similarity(unaccent(lower(p.keywords)), unaccent(lower(${q}))) * 1.3,
     similarity(unaccent(lower(p.description)), unaccent(lower(${q}))) * 1.0,
     COALESCE(similarity(unaccent(lower(CAT_COL)), unaccent(lower(${q}))), 0) * 0.8,
     COALESCE(similarity(unaccent(lower(PCAT_COL)), unaccent(lower(${q}))), 0) * 0.8
